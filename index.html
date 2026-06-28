@@ -11,10 +11,15 @@
 :root{
   --cream:#FAF7F2;--rust:#C0501A;--warm:#E8753A;--needle:#4A3728;
   --leaf:#4F6B3A;--text:#2C1F14;--muted:#8B7355;--border:#E0D4C3;--r:12px;
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-right:env(safe-area-inset-right,0px);
+  --safe-bottom:env(safe-area-inset-bottom,0px);
+  --safe-left:env(safe-area-inset-left,0px);
 }
 html,body{height:100%}
 body{font-family:Georgia,serif;color:var(--text);background:var(--cream);
-  display:flex;flex-direction:column;height:100dvh;overflow:hidden;}
+  display:flex;flex-direction:column;height:100dvh;overflow:hidden;
+  padding:var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);}
 
 /* Header */
 header{background:var(--needle);padding:8px 14px;display:flex;align-items:center;
@@ -66,7 +71,8 @@ header{background:var(--needle);padding:8px 14px;display:flex;align-items:center
 .card-delete{background:none;border:none;padding:0 13px;color:#CCC;font-size:1.1rem;
   cursor:pointer;display:flex;align-items:center;transition:color .15s;flex-shrink:0;}
 .card-delete:hover{color:#E05050;}
-#fab{position:fixed;bottom:22px;right:18px;width:54px;height:54px;border-radius:50%;
+#fab{position:fixed;bottom:calc(22px + var(--safe-bottom));right:calc(18px + var(--safe-right));
+  width:54px;height:54px;border-radius:50%;
   background:var(--rust);color:#fff;border:none;font-size:1.5rem;cursor:pointer;
   box-shadow:0 4px 14px rgba(0,0,0,.28);display:flex;align-items:center;
   justify-content:center;transition:background .15s,transform .1s;z-index:50;}
