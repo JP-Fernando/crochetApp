@@ -1,0 +1,22 @@
+{
+  "name": "Crochet Pattern Guide",
+  "short_name": "Crochet",
+  "description": "Step-by-step crochet pattern reader with project memory",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#FAF7F2",
+  "theme_color": "#4A3728",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='32' fill='%234A3728'/%3E%3Ccircle cx='96' cy='96' r='70' fill='%23C0501A' opacity='.3'/%3E%3Cpath d='M60 148 Q70 110 96 96 Q122 82 122 58 Q122 44 110 44 Q98 44 98 58' stroke='%23FAF7F2' stroke-width='9' stroke-linecap='round' fill='none'/%3E%3Ccircle cx='98' cy='58' r='11' fill='%23FAF7F2'/%3E%3Cpath d='M60 148 Q65 158 74 152' stroke='%23FAF7F2' stroke-width='7' stroke-linecap='round' fill='none'/%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='80' fill='%234A3728'/%3E%3Ccircle cx='256' cy='256' r='190' fill='%23C0501A' opacity='.3'/%3E%3Cpath d='M156 400 Q184 295 256 256 Q328 217 328 152 Q328 114 296 114 Q264 114 264 152' stroke='%23FAF7F2' stroke-width='24' stroke-linecap='round' fill='none'/%3E%3Ccircle cx='264' cy='152' r='30' fill='%23FAF7F2'/%3E%3Cpath d='M156 400 Q170 424 194 408' stroke='%23FAF7F2' stroke-width='20' stroke-linecap='round' fill='none'/%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
