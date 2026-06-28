@@ -318,6 +318,15 @@ const PageCache = {
       tx.onerror    = () => rej(tx.error);
     }));
   },
+  clearAll() {
+    return getDB().then(db => new Promise((res, rej) => {
+      const tx  = db.transaction(PAGE_STORE, 'readwrite');
+      const req = tx.objectStore(PAGE_STORE).clear();
+      req.onerror   = () => rej(req.error);
+      tx.oncomplete = () => res();
+      tx.onerror    = () => rej(tx.error);
+    }));
+  },
 };
 
 // Each DB operation gets its own transaction that we wait to fully commit.
@@ -434,7 +443,14 @@ document.getElementById('file-input').addEventListener('change', async function(
   try {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const name  = file.name.replace(/\.pdf$/i, '').trim() || 'Pattern';
-    await DB.add({ name, pdf: bytes, added: Date.now(), stepIndex: 0, totalSteps: 0 });
+    const project = { name, pdf: bytes, added: Date.now(), stepIndex: 0, totalSteps: 0 };
+    try {
+      await DB.add(project);
+    } catch (e) {
+      // Cached page images are disposable; clear them and retry once if storage is tight.
+      await PageCache.clearAll().catch(() => {});
+      await DB.add(project);
+    }
     showToast('"' + name + '" added');
     showHome();
   } catch(e) {
@@ -471,6 +487,8 @@ document.getElementById('modal').addEventListener('click', e => {
    VIEWER
 ══════════════════════════════════════ */
 let pages = [], steps = [], stepIndex = 0, currentProject = null, saveTimer = null;
+let viewerRunToken = 0;
+let renderStepToken = 0;
 
 async function updateProject(id, updates) {
   const project = await DB.get(id);
@@ -480,7 +498,77 @@ async function updateProject(id, updates) {
   return nextProject;
 }
 
+function createViewport(vpt) {
+  return {
+    width: vpt.width,
+    height: vpt.height,
+    convertToViewportPoint(x, y) {
+      const [a, b, c, d, e, f] = vpt.transform;
+      return [a * x + c * y + e, b * x + d * y + f];
+    }
+  };
+}
+
+function createCachedPage(entry) {
+  const canvas = document.createElement('canvas');
+  canvas.width = entry.width;
+  canvas.height = entry.height;
+  const ctx = canvas.getContext('2d');
+
+  const container = document.createElement('div');
+  container.className = 'page-container';
+  container.appendChild(canvas);
+
+  return {
+    canvas,
+    ctx,
+    viewport: createViewport(entry.vp),
+    textItems: [],
+    pdfImageData: null,
+    container,
+    cacheBlob: entry.blob,
+    ready: false,
+    loadPromise: null,
+  };
+}
+
+async function ensureCachedPageReady(pageIdx, runToken) {
+  const page = pages[pageIdx];
+  if (!page || page.ready || !page.cacheBlob) return page;
+
+  if (!page.loadPromise) {
+    page.loadPromise = (async () => {
+      const img = await loadImage(page.cacheBlob);
+      if (runToken !== viewerRunToken) return;
+      page.ctx.drawImage(img, 0, 0);
+      page.pdfImageData = page.ctx.getImageData(0, 0, page.canvas.width, page.canvas.height);
+      page.ready = true;
+    })().finally(() => {
+      page.loadPromise = null;
+    });
+  }
+
+  await page.loadPromise;
+  return page;
+}
+
+function hydrateCachedPages(runToken, skipIdx) {
+  setTimeout(async () => {
+    for (let i = 0; i < pages.length; i++) {
+      if (runToken !== viewerRunToken) return;
+      if (i === skipIdx) continue;
+      try {
+        await ensureCachedPageReady(i, runToken);
+      } catch (e) {
+        console.warn('Deferred cached page load failed:', e);
+      }
+      await new Promise(res => setTimeout(res, 0));
+    }
+  }, 0);
+}
+
 async function showViewer(id) {
+  const runToken = ++viewerRunToken;
   showScreen('screen-viewer');
   document.getElementById('viewer-spinner').style.display = 'flex';
   document.getElementById('pdf-wrapper').style.display    = 'none';
@@ -510,31 +598,15 @@ async function showViewer(id) {
       const cp = await PageCache.getAll(project.id);
       if (cp.length === project.pdfPageCount) {
         cp.sort((a, b) => a.pageIdx - b.pageIdx);
-        for (const entry of cp) {
-          const canvas  = document.createElement('canvas');
-          canvas.width  = entry.width;
-          canvas.height = entry.height;
-          const ctx = canvas.getContext('2d');
-          const img = await loadImage(entry.blob);
-          ctx.drawImage(img, 0, 0);
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          const vpt = entry.vp;
-          const viewport = {
-            width: vpt.width, height: vpt.height,
-            convertToViewportPoint(x, y) {
-              const [a, b, c, d, e, f] = vpt.transform;
-              return [a * x + c * y + e, b * x + d * y + f];
-            }
-          };
-          const container = document.createElement('div');
-          container.className = 'page-container';
-          container.appendChild(canvas);
-          wrapper.appendChild(container);
-          pages.push({ canvas, ctx, viewport, textItems: [],
-                       pdfImageData: imageData, container });
-        }
-        steps    = project.cachedSteps;
+        pages = cp.map(createCachedPage);
+        for (const page of pages) wrapper.appendChild(page.container);
+        steps = project.cachedSteps;
+        if (project.stepIndex > 0 && project.stepIndex < steps.length)
+          stepIndex = project.stepIndex;
+        const initialPageIdx = steps[stepIndex] ? steps[stepIndex].pageIdx : 0;
+        await ensureCachedPageReady(initialPageIdx, runToken);
         cacheHit = true;
+        hydrateCachedPages(runToken, initialPageIdx);
       }
     } catch(cacheErr) {
       console.warn('Cache load failed, re-rendering:', cacheErr);
@@ -586,6 +658,7 @@ async function showViewer(id) {
               transform: Array.from(item.transform)
             }))
           }));
+          await PageCache.clearForProject(project.id).catch(() => {});
           for (let i = 0; i < renderData.length; i++) {
             const { canvas, viewport } = renderData[i];
             const blob = await canvasToBlob(canvas);
@@ -634,12 +707,14 @@ async function showViewer(id) {
 
   document.getElementById('viewer-spinner').style.display = 'none';
   document.getElementById('pdf-wrapper').style.display    = 'flex';
-  renderStep();
+  await renderStep(runToken);
 }
 
 /* ── Highlight ── */
 function highlightStep(step) {
-  for (const p of pages) p.ctx.putImageData(p.pdfImageData, 0, 0);
+  for (const p of pages) {
+    if (p.pdfImageData) p.ctx.putImageData(p.pdfImageData, 0, 0);
+  }
   if (!step || !step.items || !step.items.length) return;
   const {ctx, viewport} = pages[step.pageIdx];
   ctx.save();
@@ -658,8 +733,9 @@ function highlightStep(step) {
 }
 
 /* ── Render step ── */
-function renderStep() {
+async function renderStep(runToken = viewerRunToken) {
   if (!steps.length) return;
+  const stepToken = ++renderStepToken;
   const step = steps[stepIndex];
   document.getElementById('step-num').textContent     = stepIndex + 1;
   document.getElementById('section-name').textContent = step.section;
@@ -672,6 +748,8 @@ function renderStep() {
   label.textContent = step.isSection ? 'New section' : 'Current step';
   document.getElementById('step-text').innerHTML = formatStep(step.text);
 
+  await ensureCachedPageReady(step.pageIdx, runToken);
+  if (runToken !== viewerRunToken || stepToken !== renderStepToken) return;
   highlightStep(step);
   pages[step.pageIdx].container.scrollIntoView({behavior:'smooth', block:'center'});
   document.getElementById('btn-back').disabled = stepIndex === 0;

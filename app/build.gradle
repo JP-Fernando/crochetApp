@@ -50,6 +50,7 @@ dependencies {
 tasks.register("syncWebAssets", Copy) {
   from(rootProject.projectDir) {
     include "index.html", "manifest.json", "sw.js"
+    include "assets/**"
   }
   into(generatedWebAssetsPath)
 }
