@@ -524,38 +524,36 @@ function formatStep(text) {
     return `<strong style="color:var(--needle)">${text}</strong>`;
   }
   return text
+    // "1 R –" / "2-8 R –" style
+    .replace(/^(\d+(?:[-–]\d+)?\s*R)\s*[-–]/i, '<span class="row-tag">$1</span> –')
+    // "R1:" / "Rnd 1:" style
     .replace(/\b(R(?:ow|nd|ound|ząd|okrąg)?\s*\d+(?:\s*[-–]\s*\d+)?)\s*:/gi,
              '<span class="row-tag">$1</span>')
     .replace(/\((\d+)\)\s*$/g, '<span class="stitch-count">($1)</span>')
-    .replace(/(magiczne\s*kółko|magic\s*(?:ring|circle)|MR)/gi,
+    .replace(/(magiczne\s*kółko|magic\s*(?:ring|circle)|MR)\b/gi,
              '<span class="row-tag">$1</span>');
 }
 
 // ── Parser ────────────────────────────────────────────────────────────────────
 function parseSteps(pages) {
 
-  const introPageRe = /materiały\s*(i\s*narzędzia)?|legenda|wskazówki|materials?\s*(&|and)\s*tools?|abbreviations?|instructions?|notes?|gauge|supplies|tools needed|how to use|before you begin|drodzy\s*szydełko|dziękuję za wybór|sklep\s*etsy|instagram|facebook/i;
-  const noiseLineRe = /prawa autorskie|copyright|\ball rights\b|wzór nie może|możesz sprzedaw|oznacz.*autora|@misi|mis\.i\.spolka|etsy\.com|facebook\.com|instagram|with love|miś\s*[&i]\s*spółka|sklep\s*etsy|^[–\-•·*]+$|^\d{1,3}$/i;
+  // Intro page detection — pages with no row instructions and only metadata
+  const introPageRe = /materiały\s*(i\s*narzędzia)?|legenda|wskazówki|abbreviations?|supplies|tools needed|how to use|before you begin|drodzy\s*szydełko|dziękuję za wybór|sklep\s*etsy/i;
 
-  const SECTION_WORDS_RE = new RegExp(
-    '^(' + [
-      'GŁOWA','CIAŁO','OGON','USZY','USZKO','RĘCE','NOGI','STOPY',
-      'PYSZCZEK','POLICZKI','MODELOWANIE','OGRODNICZKI','KLAPKA','SZELKI',
-      'KURCZAK','DZIÓB','SKRZYDŁA','KOKARDKA','KWIATKI','KWIATEK',
-      'SMYCZ','SZNUR','PRZEDNIA','TYLNA','PODSTAWA',
-      'HEAD','BODY','TAIL','EARS?','EYES?','LEGS?','ARMS?','FEET','FOOT',
-      'NOSE','BEAK','BILL','WINGS?','BOW','RIBBON','OVERALL','DUNGAREES',
-      'STRAPS?','CHICK','CHICKEN','MUZZLE','SNOUT','CHEEKS?',
-      'SHAPING','ASSEMBLY','FINISHING','APPENDAGES',
-      'ANTENNAE?','HORNS?','SPOTS?','PATCH',
-    ].join('|') + ')' +
-    '(\\s*(x\\s*[23]|×\\s*[23]|/\\s*[23]|\\d)?\\s*([-–].*)?)?$',
-    'i'
-  );
+  // Line-level noise — skip regardless of page
+  const noiseLineRe = /prawa autorskie|copyright|\ball rights\b|wzór nie może|możesz sprzedaw|oznacz.*autora|@misi|mis\.i\.spolka|etsy\.com|facebook\.com|@straw|design by|follow me on|this pattern is my|copying and|please credit|crocheting lessons|with love|miś\s*[&i]\s*spółka|sklep\s*etsy|^[–\-•·*]+$/i;
 
-  const ROW_RE = /^(R(?:ow|nd|ound|ząd|okrąg)?\s*\d+\s*(?:[-–]\s*\d+)?\s*:|Rząd\s*\d+|Okrąg\s*\d+|Round\s*\d+[:,]|Row\s*\d+[:,]|Rnd\s*\d+[:,])/i;
-  const MAGIC_RE = /^(magiczne\s*kółko|magic\s*(ring|circle)|MR\s*[=:–]|zacznij\s*(od\s*)?(białą|pomarańczową|brązową|zieloną|żółtą|musztardową|różową|czarną)\s*włóczką|start\s*with|begin\s*with)/i;
-  const INSTRUCTION_RE = /zmień\s*kolor|odetnij\s*nitkę|przyszyj|wypełnij|złóż|zamknij\s*otwór|zostaw\s*dłuższy\s*koniec|ukryj\s*nitkę|wyszyj|wbij\s*szydełko|dołącz|połącz\s*(z|obie|nogawki)|zaznacz\s*środek|wykonaj\s*(szelki|klapkę)|szydełkuj\s*(wzdłuż|dookoła|spiralnie|obrotow)|change\s*colo(u)?r|fasten\s*off|cut\s*(yarn|thread)|sew(\s*(on|to|up))?|stuff(ing)?|attach|join(\s*to)?|fold(\s*(in|flat))?|close\s*(the)?\s*(gap|opening)?|leave\s*(a\s*)?(long|tail)|hide\s*(end|tail)|embroider|insert\s*(eyes?|hook)|place\s*(the\s*)?(eyes?|marker)/i;
+  // Row instructions — both "1 R –" (EN dash style) and "R1:" (colon style)
+  const ROW_RE = /^(\d+(?:[-–]\d+)?\s*R\s*[-–]|\d+R\s*[-–]|R(?:ow|nd|ound|ząd|okrąg)?\s*\d+\s*(?:[-–]\s*\d+)?\s*:|Rząd\s*\d+|Okrąg\s*\d+|Round\s*\d+[:,]|Row\s*\d+[:,]|Rnd\s*\d+[:,])/i;
+
+  // Section headers — EN titles with colon ("Head:", "Legs and body:") AND PL all-caps
+  const SECTION_RE = /^((?:(?:first|second|third|left|right|front|back)\s+)?(?:legs?\s+and\s+body|dog\s+pattern|cat\s+pattern|bear\s+pattern|bunny\s+pattern|rabbit\s+pattern|head|body|tail|ears?|eyes?|legs?|arms?|feet|foot|nose|beak|bill|wings?|bow|ribbon|overall|dungarees|straps?|chick|chicken|muzzle|snout|cheeks?|shaping|assembly(?:\s+and\s+decoration)?|finishing|scarf|głowa|ciało|ogon|uszy|uszko|ręce|nogi|stopy|pyszczek|policzki|modelowanie|ogrodniczki|klapka|szelki|kurczak|dziób|skrzydła|kokardka|kwiatki?|smycz|sznur|przednia|tylna|podstawa)(?:\s+(?:and\s+)?(?:body|leg|decoration|pattern))*)[\s:,]*$/i;
+
+  // Magic ring / chain start / yarn colour intro
+  const MAGIC_RE = /^(magiczne\s*kółko|magic\s*(?:ring|circle)|MR\s*[=:–]|chain\s+\d+|zacznij\s+(?:białą|pomarańczową|brązową|zieloną|żółtą|musztardową|różową|czarną)\s+włóczką|(?:use|start\s+with|begin\s+with)\s+(?:white|brown|orange|yellow|green|red|black|pink|grey|gray|blue)\s+yarn)/i;
+
+  // Assembly, finishing, colour-change instructions
+  const INSTRUCTION_RE = /zmień\s*kolor|odetnij\s*nitkę|przyszyj|wypełnij|złóż|zamknij\s*otwór|zostaw\s*dłuższy\s*koniec|ukryj\s*nitkę|wyszyj|wbij\s*szydełko|dołącz|połącz\s*(?:z|obie|nogawki)|zaznacz\s*środek|change\s*(?:yarn\s*to\s*\w+|colo(?:u)?r)|fasten\s*off|cut\s*(?:yarn|thread)|sew(?:\s*(?:on|to|up|the))?|stuff(?:ing)?|attach|join(?:\s*to)?|fold(?:\s*(?:in|flat|the))?|close\s*(?:the)?\s*(?:gap|opening)?|leave\s*(?:a\s*)?(?:long|tail)|hide\s*(?:end|tail|yarn)|embroider|insert\s*(?:eyes?|hook)|place\s*(?:the\s*)?(?:eyes?|marker)|cast\s*(?:on|off)|don'?t\s*(?:fasten|stuff|finish)|repeat\s+round|make\s+\d+\s+details?|put\s+(?:a\s+)?scarf|tint\s+the|congratulations/i;
 
   function groupLines(pageObj, pageIdx) {
     const items = pageObj.textItems
@@ -584,7 +582,7 @@ function parseSteps(pages) {
 
   function isIntroPage(lines) {
     const pageText = lines.map(l => l.text).join(' ');
-    const hasRows  = lines.some(l => ROW_RE.test(l.text) || MAGIC_RE.test(l.text));
+    const hasRows  = lines.some(l => ROW_RE.test(l.text));
     if (hasRows) return false;
     return introPageRe.test(pageText);
   }
@@ -603,13 +601,11 @@ function parseSteps(pages) {
       const t = line.text;
       if (!t || t.length < 2) continue;
       if (noiseLineRe.test(t)) continue;
-      if (/^\d{1,3}$/.test(t)) continue;
+      if (/^-?\s*\d{1,3}\s*-?$/.test(t)) continue;  // page numbers like "- 4 -"
 
-      if (SECTION_WORDS_RE.test(t) && t.length < 60) {
-        const secName = t
-          .replace(/\s*(x\s*[23]|×\s*[23])\s*$/i, match => ' × ' + match.replace(/[x×\s]/g,''))
-          .replace(/\bKOLORY\b.*$/i, '')
-          .trim();
+      // Section header?
+      if (SECTION_RE.test(t) && t.length < 60) {
+        const secName = t.replace(/[:\s]+$/, '').trim();
         currentSection  = secName;
         patternGateOpen = true;
         steps.push({ text: '▶ ' + secName, section: secName,
@@ -619,23 +615,28 @@ function parseSteps(pages) {
 
       if (!patternGateOpen) continue;
 
-      if (MAGIC_RE.test(t)) {
-        steps.push({ text: t, section: currentSection, pageIdx: pi, items: line.items });
-        continue;
-      }
+      // Row instruction
       if (ROW_RE.test(t)) {
         steps.push({ text: t, section: currentSection, pageIdx: pi, items: line.items });
         continue;
       }
-      if (INSTRUCTION_RE.test(t) && t.length < 250) {
+      // Magic ring / yarn intro / chain start
+      if (MAGIC_RE.test(t)) {
         steps.push({ text: t, section: currentSection, pageIdx: pi, items: line.items });
         continue;
       }
+      // Assembly / finishing instruction
+      if (INSTRUCTION_RE.test(t) && t.length < 300) {
+        steps.push({ text: t, section: currentSection, pageIdx: pi, items: line.items });
+        continue;
+      }
+
       if (/^(kolory|colors?|colours?):/i.test(t)) continue;
       if (t.length < 10) continue;
 
-      const hasStitch = /\b(sc|dc|hdc|sl\s*st|ch|inc|dec|blo|flo|MR|p\b|sł\b|pn\b|oś\b|zm\b|zw\b|\d+\s*p\b|\(\d+\))\b/i.test(t);
-      if (hasStitch && t.length < 250) {
+      // Fallback: lines containing stitch abbreviations
+      const hasStitch = /\b(sc|dc|hdc|sl\s*st|ch\b|inc|dec|blo|flo|MR|p\b|sł\b|pn\b|oś\b|zm\b|zw\b|\d+sc|\d+dc|\(\d+\))\b/i.test(t);
+      if (hasStitch && t.length < 300) {
         steps.push({ text: t, section: currentSection, pageIdx: pi, items: line.items });
       }
     }
