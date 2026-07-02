@@ -44,7 +44,6 @@ public class MainActivity extends AppCompatActivity {
     settings.setAllowContentAccess(true);
     settings.setDatabaseEnabled(true);
     settings.setBuiltInZoomControls(false);
-    settings.setDisplayZoomControls(false);
     settings.setLoadWithOverviewMode(true);
     settings.setUseWideViewPort(true);
 
