@@ -17,6 +17,7 @@ The Android wrapper does not rewrite the app in native UI. It packages the curre
 - local asset hosting through `WebViewAssetLoader`
 - Android file picker support for importing PDF patterns
 - DOM storage / IndexedDB enabled inside the `WebView`
+- a JavaScript bridge (`AndroidEmail`) plus a `FileProvider` so a saved pattern can be sent by email as a PDF attachment
 - build-time sync of `index.html`, `manifest.json`, and `sw.js` into the APK assets
 
 That keeps one codebase for the crochet reader while making it installable as a standard Android app.
@@ -54,6 +55,35 @@ Android maps that URL to the bundled app assets with `WebViewAssetLoader`. Durin
 - `sw.js`
 
 This means changes to the web app are automatically picked up by the Android app at build time. There is no second copy of the UI to maintain.
+
+## Sending a pattern by email
+
+Each project card has an envelope button. It asks for the recipient address (the last one used is remembered) and then:
+
+- **Android app:** the PDF is passed from IndexedDB to the native side in base64 chunks, written to `cache/shared_pdfs/`, and exposed through `FileProvider`. The app looks for installed email apps (those that handle `mailto:` and accept a PDF) and opens the compose screen with the recipient, subject, notes and attachment filled in. If several email apps exist the user picks one; if none exist a generic share sheet is shown instead. If no app accepts PDFs, an error appears and the user can retry. The email itself is sent by the user's mail app, so no account or server is configured in this app.
+- **Browser/PWA:** uses the Web Share API with the PDF file when available (the recipient must be chosen in the email app); otherwise it downloads the PDF and opens a `mailto:` link with the recipient so the file can be attached manually.
+
+The manifest declares `<queries>` for `mailto:` and PDF sharing (Android 11+ package visibility). Each email app is targeted through an activity that accepts PDF attachments. A local app picker avoids Android's limit on additional chooser entries. Cancelling this picker keeps the email form open, with its recipient, ready to retry. The picker is dismissed when its Activity is destroyed, including configuration changes; the recreated page starts afresh.
+
+Each transfer has a separate URI, so another send cannot overwrite an earlier attachment. The cache keeps at most **three transfers**, including one being prepared, and removes entries older than seven days when preparing another email. There is no per-file size limit; three copies of a 17 MB pattern use at most about 51 MB. Older draft attachments may become unavailable after eviction, and Android can also reclaim cache storage, so this is not permanent storage for drafts. If cleanup fails, preparing another transfer fails rather than exceeding the count limit.
+
+### Email checks
+
+Run the JavaScript regression checks with `node tests/email.test.cjs`, build with `./gradlew assembleDebug`, and run Android checks with `./gradlew :app:lintDebug`.
+
+Run the cache regression checks without an Android device:
+
+```bash
+javac -d /tmp/crochet-cache-tests app/src/main/java/com/crochetpatternguide/app/SharedPdfCache.java tests/SharedPdfCacheTest.java
+java -cp /tmp/crochet-cache-tests com.crochetpatternguide.app.SharedPdfCacheTest
+```
+
+On an Android phone, verify these cases before release:
+
+- Import a PDF, add notes, tap the envelope, enter an address, and check the recipient, subject, notes and readable attachment in the email app. Send it and open the received PDF.
+- Share a large PDF, cancel, and retry. Prepare a second email with the same pattern name and check that the first attachment still opens.
+- With multiple email apps, check that all are listed and that cancelling the picker keeps the email form open and permits retrying. Change dark mode or font size with the picker open and check that no orphaned window remains after the Activity is recreated.
+- With no email app, check the fallback share sheet; with no PDF-sharing apps, check that an error appears and retry remains available.
 
 ## Building the Android app
 
@@ -100,3 +130,5 @@ The browser version and Android version share the same UI and behavior, but thei
 - Add a Gradle wrapper so the project builds without a preinstalled Gradle.
 - Generate proper adaptive launcher icons instead of using a single vector drawable.
 - Add release signing configuration and Play Store metadata if you intend to publish it.
+- Add a "back to top" button to the PDF steps viewer, so users can jump back to step 1 without repeatedly clicking "back".
+- Add double-tap on a PDF step to jump to that step. Single tap was previously disabled for this because it collided with pinch-to-zoom gestures; double tap avoids that ambiguity.
